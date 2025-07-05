@@ -227,14 +227,32 @@ function InnerApp() {
     initializeApp();
   }, []);
 
-  // Auto-scroll chat to bottom when new messages arrive
-  useEffect(() => {
-    if (chatMessages.length > 0 && chatListRef.current) {
+  // Improved scroll-to-end function with better layout handling
+  const scrollToEndWithDelay = () => {
+    if (chatListRef.current) {
+      // First scroll attempt - immediate for quick feedback
       setTimeout(() => {
         chatListRef.current?.scrollToEnd({ animated: true });
       }, 100);
+      
+      // Second scroll attempt - for complex messages with follow-up options
+      setTimeout(() => {
+        chatListRef.current?.scrollToEnd({ animated: true });
+      }, 300);
+      
+      // Final scroll attempt - ensure we reach the bottom even for complex layouts
+      setTimeout(() => {
+        chatListRef.current?.scrollToEnd({ animated: false });
+      }, 600);
     }
-  }, [chatMessages]);
+  };
+
+  // Auto-scroll chat to bottom when new messages arrive or typing state changes
+  useEffect(() => {
+    if ((chatMessages.length > 0 || isTyping)) {
+      scrollToEndWithDelay();
+    }
+  }, [chatMessages, isTyping]);
 
   // Fetch test question when entering test mode onboarding (step 4)
   useEffect(() => {
@@ -315,28 +333,21 @@ function InnerApp() {
       // Call the ADHD chatbot
       const response: ChatbotResponse = await chatbot(userMessage.content, context);
       
-      // Create bot message
+      // Create bot message with follow-up options if available
       const botMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
         content: response.reply,
         sender: 'bot',
-        timestamp: new Date()
+        timestamp: new Date(),
+        followUpOptions: response.followUpOptions
       };
       
+      // Add bot message in single update to prevent multiple scroll triggers
       setChatMessages(prev => [...prev, botMessage]);
       
       // Handle any suggested actions from the chatbot
       if (response.actions && response.actions.length > 0) {
         handleChatbotActions(response.actions);
-      }
-
-      // Store follow-up options with the message for rendering
-      if (response.followUpOptions && response.followUpOptions.length > 0) {
-        const updatedBotMessage = {
-          ...botMessage,
-          followUpOptions: response.followUpOptions
-        };
-        setChatMessages(prev => [...prev.slice(0, -1), updatedBotMessage]);
       }
       
     } catch (error) {
@@ -406,6 +417,7 @@ function InnerApp() {
         followUpOptions: response.followUpOptions // Keep follow-up options for next level
       };
       
+      // Add bot message in single update to prevent multiple scroll triggers
       setChatMessages(prev => [...prev, botMessage]);
       
     } catch (error) {
@@ -1380,14 +1392,28 @@ function InnerApp() {
                 /* Chat Messages */
                 <FlatList
                   ref={chatListRef}
-                  data={chatMessages}
+                  data={[...chatMessages, ...(isTyping ? [{ id: 'typing', content: 'AI is typing...', sender: 'bot', timestamp: new Date(), isTyping: true }] : [])]}
                   keyExtractor={item => item.id}
                   style={styles.chatList}
                   contentContainerStyle={styles.chatListContent}
                   showsVerticalScrollIndicator={false}
                   removeClippedSubviews={false}
-                  onContentSizeChange={() => chatListRef.current?.scrollToEnd({ animated: true })}
+                  onLayout={scrollToEndWithDelay}
                   renderItem={({ item }) => {
+                    // Handle typing indicator
+                    if (item.isTyping) {
+                      return (
+                        <View style={[styles.chatBubble, styles.botBubble, styles.typingBubble]}>
+                          <Text style={[styles.chatText, styles.botText]}>AI is typing...</Text>
+                          <View style={styles.typingIndicator}>
+                            <View style={styles.typingDot} />
+                            <View style={styles.typingDot} />
+                            <View style={styles.typingDot} />
+                          </View>
+                        </View>
+                      );
+                    }
+                    
                     const isDetailedGuidance = item.content.includes('**') && item.content.includes('✅');
                     
                     return (
@@ -1434,18 +1460,6 @@ function InnerApp() {
                   }}
                 />
                )}
-              
-              {/* Typing indicator */}
-              {isTyping && (
-                <View style={[styles.chatBubble, styles.botBubble, styles.typingBubble]}>
-                  <Text style={[styles.chatText, styles.botText]}>AI is typing...</Text>
-                  <View style={styles.typingIndicator}>
-                    <View style={styles.typingDot} />
-                    <View style={styles.typingDot} />
-                    <View style={styles.typingDot} />
-                  </View>
-                </View>
-              )}
             </View>
             
             {/* Input area */}

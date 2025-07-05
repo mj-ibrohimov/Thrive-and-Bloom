@@ -29,6 +29,7 @@ export interface ChatMessage {
   sender: 'user' | 'bot';
   timestamp: Date;
   followUpOptions?: FollowUpOption[];
+  isTyping?: boolean;
 }
 
 export interface ChatContext {
